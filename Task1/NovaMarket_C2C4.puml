@@ -1,0 +1,104 @@
+@startuml NovaMarket_C2
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Контекстная диаграмма: NovaMarket EDA
+
+System_Boundary(novamarket, "NovaMarket", "Kubernetes") {
+    Component(api_gateway, "MarketController", "Apollo Federation", "Main API gateway")
+    Component(notificationService, "Notification Service", "Java", "Отправка уведомлений")
+    Component(keycloak, "Менеджер доступа", "KeyCloak", "Проведение аутентификации, хранение и валидация токенов доступа")
+    Component(graylog, "Сбор логов", "Graylog", "Сбор, хранение, анализ логов")
+    Component(zipkin, "Трассировка", "Zipkin", "Диагностика производительности")
+
+    ' Metrics
+    Container_Boundary(metrics, "Сбор и визуализация метрик") {
+        Component(prometheus, "Метрики", "Prometheus", "Сбор метрик")
+        Component(grafana, "Дашбоард", "Grafana", "Визуализация метрик")
+        Rel(prometheus, grafana, "Поставляет данные")
+    }
+
+    ' Microservices
+    Container_Boundary(store, "Store Microservice", "Склад товаров") {
+        Component(storeService, "Store Service", "Java", "Учет товаров, резервирование и отгрузка")
+        ComponentDb(postgres_store, "Store DB", "PostgreSQL", "Данные о складских запасах")
+    }
+
+    Container_Boundary(catalog, "Catalog Microservice", "Каталог продукции") {
+        Component(catalogService, "Catalog Service", "Java", "Полная информация о товарах и ценах")
+        ComponentDb(postgres_catalog, "Catalog DB", "PostgreSQL", "Данные товаров, отзывы")
+    }
+
+    Container_Boundary(basket, "Basket Microservice", "Корзина покупателя") {
+        Component(basketService, "Basket Service", "Java", "Ведение списка выбранных товаров")
+        ComponentDb(mongodb_basket, "Basket DB", "MongoDB", "Товары в корзине, кешированные данные")
+    }
+
+    Container_Boundary(account, "Account Microservice", "Личный кабинет") {
+        Component(accountService, "Account Service", "Java", "Ведение личных данных пользователей, пользовательские действия")
+        ComponentDb(postgres_account, "Account DB", "PostgreSQL", "Пользовательские данные")
+    }
+
+    Container_Boundary(order, "Order Microservice", "Сервис заказов") {
+        Component(orderService, "Order Service", "Java", "Ведение информации о заказах")
+        ComponentDb(postgres_order, "Order DB", "PostgreSQL", "Информация о созданных заказах")
+    }
+    
+    Container_Boundary(delivery, "Delivery Microservice", "Сервис доставки") {
+        Component(deliveryService, "Delivery Service", "Java", "Ведение доступных способов доставки, оформление и мониторинг доставки")
+        ComponentDb(redis_delivery, "Delivery cache", "Redis", "Кеширование заказов в обработке")
+        ComponentDb(postgres_delivery, "Delivery DB", "PostgreSQL", "Информация о доступных способах доставки и заявках на доставку")
+    }
+    
+    Container_Boundary(payment, "Payment Microservice", "Сервис оплаты") {
+        Component(paymentService, "Payment Service", "Java", "Проведение оплаты")
+        ComponentDb(postgres_payment, "Payment cache", "Redis", "Кеширование заказов в обработке")
+        ComponentDb(redis_payment, "Payment DB", "PostgreSQL", "Сохраненные способы оплаты")
+    }
+
+    ' Topics
+    ComponentQueue(topic_orders, "Топик событий 'Заказ оформлен'", "Apache Kafka")
+    ComponentQueue(topic_bookings, "Топик событий 'Товар забронирован'", "Apache Kafka")
+    ComponentQueue(topic_payments, "Топик событий 'Платеж подтвержден'", "Apache Kafka")
+    
+    ' Gateway-Service relations
+    Rel(api_gateway, storeService, "Uses", "GraphQL")
+    Rel(api_gateway, catalogService, "Uses", "GraphQL")
+    Rel(api_gateway, basketService, "Uses", "GraphQL")
+    Rel(api_gateway, accountService, "Uses", "GraphQL")
+    Rel(api_gateway, orderService, "Uses", "GraphQL")
+    Rel(api_gateway, deliveryService, "Uses", "GraphQL")
+    Rel(api_gateway, paymentService, "Uses", "GraphQL")
+
+    ' Kafka-sub
+    Rel(basketService, topic_bookings, "Потребляет", "Kafka")
+    Rel(paymentService, topic_bookings, "Потребляет", "Kafka")
+    Rel(storeService, topic_orders, "Потребляет", "Kafka")
+    Rel(deliveryService, topic_orders, "Потребляет", "Kafka")
+    Rel(deliveryService, topic_payments, "Потребляет", "Kafka")
+    Rel(notificationService, topic_orders, "Потребляет", "Kafka")
+    Rel(notificationService, topic_payments, "Потребляет", "Kafka")
+    Rel(orderService, topic_orders, "Потребляет", "Kafka")
+    Rel(orderService, topic_payments, "Потребляет", "Kafka")
+
+    ' Kafka-pub
+    Rel(storeService, basketService, "Событие 'Пользователь изменил товар в корзине'", "Kafka")
+    Rel(deliveryService, orderService, "Событие 'Статус доставки изменился'", "Kafka")
+    Rel(basketService, topic_orders, "Публикует", "Kafka")
+    Rel(storeService, topic_bookings, "Публикует", "Kafka")
+    Rel(paymentService, topic_payments, "Публикует", "Kafka")
+}
+
+Person(user, "User", "Interacts with frontend")
+Person(seller, "Seller", "Send orders")
+Person(worker, "Worker", "Manages application")
+
+Rel(user, api_gateway, "Uses", "GraphQL")
+Rel(worker, grafana, "Uses", "REST API")
+Rel(worker, graylog, "Uses", "REST API")
+Rel(worker, zipkin, "Uses", "REST API")
+Rel(api_gateway, keycloak, "Uses")
+Rel(notificationService, seller, "Notifies", "Mail/Other")
+
+@enduml
