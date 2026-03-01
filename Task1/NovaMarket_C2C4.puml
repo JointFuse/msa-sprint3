@@ -8,6 +8,16 @@ title Контекстная диаграмма: NovaMarket EDA
 System_Boundary(novamarket, "NovaMarket", "Kubernetes") {
     Component(api_gateway, "MarketController", "Apollo Federation", "Main API gateway")
     Component(notificationService, "Notification Service", "Java", "Отправка уведомлений")
+    Component(keycloak, "Менеджер доступа", "KeyCloak", "Проведение аутентификации, хранение и валидация токенов доступа")
+    Component(graylog, "Сбор логов", "Graylog", "Сбор, хранение, анализ логов")
+    Component(zipkin, "Трассировка", "Zipkin", "Диагностика производительности")
+
+    ' Metrics
+    Container_Boundary(metrics, "Сбор и визуализация метрик") {
+        Component(prometheus, "Метрики", "Prometheus", "Сбор метрик")
+        Component(grafana, "Дашбоард", "Grafana", "Визуализация метрик")
+        Rel(prometheus, grafana, "Поставляет данные")
+    }
 
     ' Microservices
     Container_Boundary(store, "Store Microservice", "Склад товаров") {
@@ -37,12 +47,14 @@ System_Boundary(novamarket, "NovaMarket", "Kubernetes") {
     
     Container_Boundary(delivery, "Delivery Microservice", "Сервис доставки") {
         Component(deliveryService, "Delivery Service", "Java", "Ведение доступных способов доставки, оформление и мониторинг доставки")
+        ComponentDb(redis_delivery, "Delivery cache", "Redis", "Кеширование заказов в обработке")
         ComponentDb(postgres_delivery, "Delivery DB", "PostgreSQL", "Информация о доступных способах доставки и заявках на доставку")
     }
     
     Container_Boundary(payment, "Payment Microservice", "Сервис оплаты") {
         Component(paymentService, "Payment Service", "Java", "Проведение оплаты")
-        ComponentDb(postgres_payment, "Payment DB", "PostgreSQL", "Сохраненные способы оплаты")
+        ComponentDb(postgres_payment, "Payment cache", "Redis", "Кеширование заказов в обработке")
+        ComponentDb(redis_payment, "Payment DB", "PostgreSQL", "Сохраненные способы оплаты")
     }
 
     ' Topics
@@ -51,13 +63,13 @@ System_Boundary(novamarket, "NovaMarket", "Kubernetes") {
     ComponentQueue(topic_payments, "Топик событий 'Платеж подтвержден'", "Apache Kafka")
     
     ' Gateway-Service relations
-    ' Rel(api_gateway, store, "Uses", "GraphQL")
-    ' Rel(api_gateway, catalog, "Uses", "GraphQL")
-    ' Rel(api_gateway, basket, "Uses", "GraphQL")
-    ' Rel(api_gateway, account, "Uses", "GraphQL")
-    ' Rel(api_gateway, order, "Uses", "GraphQL")
-    ' Rel(api_gateway, delivery, "Uses", "GraphQL")
-    ' Rel(api_gateway, payment, "Uses", "GraphQL")
+    Rel(api_gateway, storeService, "Uses", "GraphQL")
+    Rel(api_gateway, catalogService, "Uses", "GraphQL")
+    Rel(api_gateway, basketService, "Uses", "GraphQL")
+    Rel(api_gateway, accountService, "Uses", "GraphQL")
+    Rel(api_gateway, orderService, "Uses", "GraphQL")
+    Rel(api_gateway, deliveryService, "Uses", "GraphQL")
+    Rel(api_gateway, paymentService, "Uses", "GraphQL")
 
     ' Kafka-sub
     Rel(basketService, topic_bookings, "Потребляет", "Kafka")
@@ -80,8 +92,13 @@ System_Boundary(novamarket, "NovaMarket", "Kubernetes") {
 
 Person(user, "User", "Interacts with frontend")
 Person(seller, "Seller", "Send orders")
+Person(worker, "Worker", "Manages application")
 
 Rel(user, api_gateway, "Uses", "GraphQL")
+Rel(worker, grafana, "Uses", "REST API")
+Rel(worker, graylog, "Uses", "REST API")
+Rel(worker, zipkin, "Uses", "REST API")
+Rel(api_gateway, keycloak, "Uses")
 Rel(notificationService, seller, "Notifies", "Mail/Other")
 
 @enduml

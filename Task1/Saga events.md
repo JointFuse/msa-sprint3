@@ -9,3 +9,12 @@
 |Истекло время оплаты|timeout|OrderReservationCanceled|
 |Платеж подтвержден|domain|PaymentSucceded|
 |Оплата не прошла|failure|PaymentFailed|
+|Товар снят с резерва|compensation|PaymentFailed|
+|Возврат денег|compensation|OrderFailed|
+|Товар убран из корзины|compensation|OrderCanceled|
+|Возврат бонусных баллов|compensation|OrderFailed|
+|Разблокировать деньги на карте|compensation|OrderCanceled|
+|Остановить упаковку/доставку|compensation|OrderCanceled|
+|Отправить уведомление об отмене заказа|compensation|OrderCanceled|
+|Отправить уведомление об ошибке оплаты|compensation|PaymentFailed|
+|Отправить уведомление о возврате средств и невозможности доставки|compensation|OrderFailed|
